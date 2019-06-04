@@ -195,7 +195,7 @@ class ArticleGenerator:
 
         return final_clusters, closest
 
-    def step_clusterize_questions(self, embed_module, questions):
+    def step_clusterize_questions(self, embed_module, questions, data_df):
         num_clusters = int(len(questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
 
         def fill_by_questions(q):
