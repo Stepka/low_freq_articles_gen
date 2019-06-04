@@ -26,9 +26,9 @@ from itertools import combinations
 from random import randint
 from sklearn.externals import joblib
 
-import model
-import sample
-import encoder
+from . import model
+from . import sample
+from . import encoder
 
 
 class ArticleGenerator:
