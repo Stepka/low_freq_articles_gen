@@ -191,11 +191,11 @@ class ArticleGenerator:
 
         elapsed_time = time() - start_time
         if verbose > 0:
-            print ("total elapsed time:", timedelta(seconds=elapsed_time))
+            print("total elapsed time:", timedelta(seconds=elapsed_time))
 
         return final_clusters, closest
 
-    def step_clusterize_questions(self, embed_module):
+    def step_clusterize_questions(self, embed_module, questions):
         num_clusters = int(len(questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
 
         def fill_by_questions(q):
@@ -203,7 +203,6 @@ class ArticleGenerator:
             return questions_clusters[i[0][0]]
 
         if self.STAGE < 2:
-            print("num clusters:", num_clusters)
 
             unique_questions = np.unique(questions)
 
