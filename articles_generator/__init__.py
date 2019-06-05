@@ -71,12 +71,13 @@ class ArticleGenerator:
     ###############################
     def step_load_data(self):
         if self.STAGE < 1:
-            df = pd.read_csv(self.default_path + 'data/meta.csv')
-            df['text'] = ""
+            self.data_df = pd.read_csv(self.default_path + 'data/meta.csv')
+            self.data_df['text'] = ""
         else:
-            df = pd.read_csv(self.default_path + 'data/meta_with_texts.csv')
+            self.data_df = pd.read_csv(self.default_path + 'data/meta_with_texts.csv')
 
-        return df
+        self.questions = self.data_df['question']
+        return self.data_df
 
     ###############################
     # extract embedings
@@ -84,12 +85,12 @@ class ArticleGenerator:
 
     def step_prepare_tf_hub(self):
         # Import the Universal Sentence Encoder's TF Hub module
-        embed = hub.Module(self.module_url)
+        self.embed_module = hub.Module(self.module_url)
 
         # Reduce logging output.
         tf.logging.set_verbosity(tf.logging.ERROR)
 
-        return embed
+        return self.embed_module
 
     def get_embedings(self, strings, verbose=0):
         embeddings = np.array([])
@@ -227,6 +228,7 @@ class ArticleGenerator:
         else:
             self.clustered_questions_df = pd.read_csv(self.default_path + 'data/clustered_questions_df.csv')
 
+        self.data_df['question_cluster_id'] = self.clustered_questions_df['cluster_id']
         return self.clustered_questions_df
 
     ###############################
