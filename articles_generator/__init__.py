@@ -59,7 +59,14 @@ class ArticleGenerator:
 
         self.BATCH_SIZE = 1000
 
-    ###############################
+        self.data_df = None
+        self.questions = None
+        self.embed_module = None
+        self.clustered_questions_df = None
+        self.START_STEP = 0
+        self.gpt_questions_df = None
+
+###############################
     # load and processig data
     ###############################
     def step_load_data(self):
@@ -84,11 +91,11 @@ class ArticleGenerator:
 
         return embed
 
-    def get_embedings(self, embed_module, strings, verbose=0):
+    def get_embedings(self, strings, verbose=0):
         embeddings = np.array([])
 
         similarity_input_placeholder = tf.placeholder(tf.string, shape=(None))
-        similarity_message_encodings = embed_module(similarity_input_placeholder)
+        similarity_message_encodings = self.embed_module(similarity_input_placeholder)
 
         with tf.Session() as session:
             session.run(tf.global_variables_initializer())
@@ -117,9 +124,9 @@ class ArticleGenerator:
     # clusterization based on their embedings [K-Means]
     ###############################
 
-    def clusterize_it(self, embed_module, strings, algorithm, num_clusters, verbose=0):
+    def clusterize_it(self, strings, algorithm, num_clusters, verbose=0):
 
-        embeddings = self.get_embedings(embed_module, strings, verbose=0)
+        embeddings = self.get_embedings(strings, verbose=0)
 
         start_time = time()
 
@@ -195,8 +202,8 @@ class ArticleGenerator:
 
         return final_clusters, closest
 
-    def step_clusterize_questions(self, embed_module, questions, data_df):
-        num_clusters = int(len(questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
+    def step_clusterize_questions(self):
+        num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
 
         def fill_by_questions(q):
             i = np.where(unique_questions == q)
@@ -204,24 +211,23 @@ class ArticleGenerator:
 
         if self.STAGE < 2:
 
-            unique_questions = np.unique(questions)
+            unique_questions = np.unique(self.questions)
 
-            questions_clusters, center_indexes = self.clusterize_it(embed_module,
-                                                                    unique_questions,
+            questions_clusters, center_indexes = self.clusterize_it(unique_questions,
                                                                     self.CLUSTER_ALGORITHM,
                                                                     num_clusters,
                                                                     verbose=1)
 
-            s1 = pd.Series(questions, name='question')
+            s1 = pd.Series(self.questions, name='question')
             s2 = pd.Series(s1.apply(fill_by_questions), name='cluster_id')
 
-            df = pd.concat([data_df['id'], s1, s2], axis=1)
-            df.to_csv(self.default_path + 'data/clustered_questions_df.csv')
+            self.clustered_questions_df = pd.concat([self.data_df['id'], s1, s2], axis=1)
+            self.clustered_questions_df.to_csv(self.default_path + 'data/clustered_questions_df.csv')
 
         else:
-            df = pd.read_csv(self.default_path + 'data/clustered_questions_df.csv')
+            self.clustered_questions_df = pd.read_csv(self.default_path + 'data/clustered_questions_df.csv')
 
-        return df
+        return self.clustered_questions_df
 
     ###############################
     # generate texts using GPT-2
@@ -295,7 +301,7 @@ class ArticleGenerator:
             start_time = time()
             num_steps = len(strings)
 
-            texts = gpt_questions_df['text'].values
+            texts = save_df['text'].values
             for step in range(start_step, num_steps):
                 raw_text = strings[step]
                 context_tokens = enc.encode(raw_text)
@@ -338,14 +344,14 @@ class ArticleGenerator:
 
             return texts
 
-    def step_generate_questions_texts(self, clustered_questions_df, START_STEP):
-        question_clusters_ids = clustered_questions_df['cluster_id']
+    def step_generate_questions_texts(self, START_STEP):
+        question_clusters_ids = self.clustered_questions_df['cluster_id']
         question_clusters_ids = np.unique(question_clusters_ids)
         print('question_clusters_ids', len(question_clusters_ids))
         typical_questions = []
 
         for cluster_id in question_clusters_ids:
-            typical_question = clustered_questions_df[clustered_questions_df['cluster_id'] == cluster_id]['question'].values
+            typical_question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
             # non-clustered
             if cluster_id == -1:
                 for q in typical_question:
@@ -363,17 +369,21 @@ class ArticleGenerator:
             texts = [''] * len(typical_questions)
             s1 = pd.Series(typical_questions, name='question')
             s2 = pd.Series(texts, name='text')
-            df = pd.concat([s1, s2], axis=1)
+            self.gpt_questions_df = pd.concat([s1, s2], axis=1)
         else:
-            df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
+            self.gpt_questions_df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
 
         if START_STEP == len(question_clusters_ids):
             texts = self.interact_model(typical_questions, df, START_STEP,
                                    model_name='345M', seed=77, top_k=40, verbose=1)
 
-        return df
+        return self.gpt_questions_df
 
-    def step_merge_texts_to_questions(self, gpt_questions_df, clustered_questions_df):
+    def step_merge_texts_to_questions(self):
+
+        clustered_questions_df = self.clustered_questions_df
+        gpt_questions_df = self.gpt_questions_df
+
         def fill_by_cluster_ids(q):
             cluster_id = clustered_questions_df[clustered_questions_df['question'] == q]['cluster_id'].values
 
@@ -382,7 +392,7 @@ class ArticleGenerator:
 
             return -2
 
-        gpt_questions_df['cluster_id'] = gpt_questions_df['question'].apply(fill_by_cluster_ids)
+        self.gpt_questions_df['cluster_id'] = self.gpt_questions_df['question'].apply(fill_by_cluster_ids)
 
         #
 
@@ -402,7 +412,7 @@ class ArticleGenerator:
 
             return ''
 
-        clustered_questions_df['text'] = clustered_questions_df['question'].apply(fill_by_texts)
+        self.clustered_questions_df['text'] = self.clustered_questions_df['question'].apply(fill_by_texts)
 
-    def save_articles(self, clustered_questions_df):
-        clustered_questions_df.to_csv(self.default_path + 'data/articles_by_question.csv')
+    def save_articles(self, articles_by_question):
+        articles_by_question.to_csv(self.default_path + 'data/articles_by_question.csv')
