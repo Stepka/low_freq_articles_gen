@@ -265,8 +265,10 @@ class ArticleGenerator:
             sentences = self.all_sentences[cluster_id]
             question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values[0]
 
-            closest = self.find_closest_to(sentences, question, 50)
-
+            closest = self.find_closest_to(sentences, question, 10)
+            print('---')
+            print(len(sentences))
+            print(closest)
             sentences = np.array(sentences)
             sentences[np.array(closest)]
 
