@@ -409,7 +409,7 @@ class ArticleGenerator:
             length=None,
             temperature=1,
             top_k=0,
-            models_dir='../models',
+            models_dir='models',
             verbose=0
     ):
         """
