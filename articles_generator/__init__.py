@@ -19,6 +19,7 @@ from sklearn.metrics import pairwise_distances_argmin_min
 from sklearn.datasets.samples_generator import make_blobs
 from sklearn import metrics
 import distance
+from scipy.spatial import cKDTree
 
 import re
 from collections import Counter
@@ -259,7 +260,15 @@ class ArticleGenerator:
     #  step
     ###############################
     def step_find_closest_sentences_to_question(self):
-        pass
+
+        for cluster_id in range(len(self.all_sentences)):
+            sentences = self.all_sentences[cluster_id]
+            question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values[0]
+
+            closest = self.find_closest_to(sentences, question, 50)
+
+            sentences = np.array(sentences)
+            sentences[np.array(closest)]
 
     ###############################
     #  step
@@ -555,6 +564,25 @@ class ArticleGenerator:
             all_sentences.extend(sentences)
 
         return all_sentences
+
+    ###############################
+    # closest strings to given string
+    ###############################
+
+    def find_closest_to(self, strings, target, num_closest, verbose=0):
+
+        start_time = time()
+
+        embeddings_for_strings = self.get_embedings(strings, verbose=0)
+        embeddings_for_target = self.get_embedings([target], verbose=0)
+
+        closest = cKDTree(embeddings_for_strings).query(embeddings_for_target[0], k=num_closest)[1]
+
+        elapsed_time = time() - start_time
+        if verbose > 0:
+            print("total elapsed time:", timedelta(seconds=elapsed_time))
+
+        return closest
 
     def save_articles(self, articles_by_question):
         articles_by_question.to_csv(self.default_path + 'data/articles_by_question.csv')
