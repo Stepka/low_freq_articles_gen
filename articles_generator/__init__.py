@@ -220,7 +220,8 @@ class ArticleGenerator:
 
             start_time = time()
 
-            num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
+            # num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
+            num_clusters = np.max(self.clustered_questions_df['cluster_id']) + 1
 
             text_ids = []
             group_obj = self.clustered_questions_df.groupby('cluster_id')
@@ -329,7 +330,8 @@ class ArticleGenerator:
             final_closest = [-1] * len(embeddings)
             last_cluster_id = 0
             while not all_done:
-                print('multiplicator:', multiplicator)
+                if verbose > 1:
+                    print('multiplicator:', multiplicator)
                 clustering = DBSCAN(eps=0.4/multiplicator, min_samples=2).fit(samples)
                 clusters = clustering.labels_
                 closest = clustering.core_sample_indices_
@@ -340,8 +342,9 @@ class ArticleGenerator:
 
                 unique, counts = np.unique(clusters, return_counts=True)
 
-                print('counts', counts)
-                print('unique', unique)
+                if verbose > 1:
+                    print('counts', counts)
+                    print('unique', unique)
                 #             print('closest', closest)
                 #             print('closest', len(closest))
 
@@ -355,7 +358,8 @@ class ArticleGenerator:
                         if unique[i] != -1:
                             all_done = False
 
-                print('repeat_indicies', repeat_indicies)
+                if verbose > 1:
+                    print('repeat_indicies', repeat_indicies)
                 new_samples = []
                 for i in repeat_indicies:
                     new_samples.extend(samples[clusters == i].tolist())
@@ -376,6 +380,12 @@ class ArticleGenerator:
                 samples = np.array(new_samples)
 
                 multiplicator += 0.3
+
+            last_cluster_id = np.max(final_clusters) + 1
+            for i in range(len(final_clusters)):
+                if final_clusters[i] == -1:
+                    final_clusters[i] = last_cluster_id
+                    last_cluster_id += 1
 
         elapsed_time = time() - start_time
         if verbose > 0:
