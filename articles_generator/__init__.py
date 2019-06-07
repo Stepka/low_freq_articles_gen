@@ -65,9 +65,10 @@ class ArticleGenerator:
         self.clustered_questions_df = None
         self.START_STEP = 0
         self.gpt_questions_df = None
+        self.all_sentences = None
 
-###############################
-    # load and processig data
+    ###############################
+    # STEP 1: load main dataframe, extract questions
     ###############################
     def step_load_data(self):
         if self.STAGE < 1:
@@ -80,9 +81,9 @@ class ArticleGenerator:
         return self.data_df
 
     ###############################
-    # extract embedings
+    # STEP 2: load and init Universal Sentence Encoder's TF Hub module
+    # Universal Sentence Encoder used for convert sentences to 512 dimensional float (-1, 1) vectors
     ###############################
-
     def step_prepare_tf_hub(self):
         # Import the Universal Sentence Encoder's TF Hub module
         self.embed_module = hub.Module(self.module_url)
@@ -91,6 +92,185 @@ class ArticleGenerator:
         tf.logging.set_verbosity(tf.logging.ERROR)
 
         return self.embed_module
+
+    ###############################
+    # STEP 3: find clusters among questions
+    # Found clusters stores to clustered_questions_df.
+    # Then field cluster_id from clustered_questions_df connect to field question_cluster_id from main dataframe.
+    ###############################
+    def step_clusterize_questions(self):
+        num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
+
+        def fill_by_questions(q):
+            i = np.where(unique_questions == q)
+            return questions_clusters[i[0][0]]
+
+        if self.STAGE < 2:
+
+            unique_questions = np.unique(self.questions)
+
+            questions_clusters, center_indexes = self.clusterize_it(unique_questions,
+                                                                    self.CLUSTER_ALGORITHM,
+                                                                    num_clusters,
+                                                                    verbose=1)
+
+            s1 = pd.Series(self.questions, name='question')
+            s2 = pd.Series(s1.apply(fill_by_questions), name='cluster_id')
+
+            self.clustered_questions_df = pd.concat([self.data_df['id'], s1, s2], axis=1)
+            self.clustered_questions_df.to_csv(self.default_path + 'data/clustered_questions_df.csv')
+
+        else:
+            self.clustered_questions_df = pd.read_csv(self.default_path + 'data/clustered_questions_df.csv')
+
+        self.data_df['question_cluster_id'] = self.clustered_questions_df['cluster_id']
+        return self.clustered_questions_df
+
+    ###############################
+    # STEP 4: generate texts for question's clusters
+    # Here we take any question from cluster, pass it to GPT-2 and save text to gpt_questions_df
+    ###############################
+    def step_generate_questions_texts(self, START_STEP):
+        question_clusters_ids = self.clustered_questions_df['cluster_id']
+        question_clusters_ids = np.unique(question_clusters_ids)
+        print('question_clusters_ids', len(question_clusters_ids))
+        typical_questions = []
+
+        for cluster_id in question_clusters_ids:
+            typical_question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
+            # non-clustered
+            if cluster_id == -1:
+                for q in typical_question:
+                    typical_questions.append(q)
+            else:
+                if len(typical_question) > 0:
+                    typical_questions.append(typical_question[0])
+
+        print("num typical_questions:", len(typical_questions))
+        typical_questions = np.unique(typical_questions)
+
+        print("num typical_questions:", len(typical_questions))
+
+        if START_STEP == 0:
+            texts = [''] * len(typical_questions)
+            s1 = pd.Series(typical_questions, name='question')
+            s2 = pd.Series(texts, name='text')
+            self.gpt_questions_df = pd.concat([s1, s2], axis=1)
+        else:
+            self.gpt_questions_df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
+
+        if START_STEP == len(question_clusters_ids):
+            texts = self.interact_model(typical_questions, self.gpt_questions_df, START_STEP,
+                                        model_name='345M', seed=77, top_k=40, verbose=1)
+
+        return self.gpt_questions_df
+
+    ###############################
+    # STEP 5: fill question's clusters with generated texts
+    # Save it to clustered_questions_df
+    ###############################
+    def step_merge_texts_to_questions(self):
+
+        clustered_questions_df = self.clustered_questions_df
+        gpt_questions_df = self.gpt_questions_df
+
+        def fill_by_cluster_ids(q):
+            cluster_id = clustered_questions_df[clustered_questions_df['question'] == q]['cluster_id'].values
+
+            if len(cluster_id) > 0:
+                return cluster_id[0]
+
+            return -2
+
+        self.gpt_questions_df['cluster_id'] = self.gpt_questions_df['question'].apply(fill_by_cluster_ids)
+
+        #
+
+        def fill_by_texts(question):
+            text = gpt_questions_df[gpt_questions_df['question'] == question]['text'].values
+
+            if len(text) > 0:
+                return text[0]
+
+            cluster_id = clustered_questions_df[clustered_questions_df['question'] == question]['cluster_id'].values
+
+            if len(cluster_id) > 0:
+                text = gpt_questions_df[gpt_questions_df['cluster_id'] == cluster_id[0]]['text'].values
+
+                if len(text) > 0:
+                    return text[0]
+
+            return ''
+
+        self.clustered_questions_df['text'] = self.clustered_questions_df['question'].apply(fill_by_texts)
+
+    ###############################
+    #  step
+    ###############################
+    def step_load_texts(self):
+        if self.STAGE < 1:
+            self.fill_df_with_texts(self.data_df)
+
+    ###############################
+    #  step
+    ###############################
+    def step_extract_sentences(self):
+        if self.STAGE < 3:
+            self.all_sentences = []
+
+            start_time = time()
+
+            num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
+
+            text_ids = []
+            group_obj = self.clustered_questions_df.groupby('cluster_id')
+            for i in range(num_clusters):
+                if i in group_obj.groups.keys():
+                    text_ids.append(group_obj.get_group(i)['id'].values)
+                else:
+                    text_ids.append([])
+
+            self.data_df['split_sentences'] = ""
+            for i in range(num_clusters):
+                sentences = self.extract_sentences(self.data_df, text_ids[i])
+                sentences = np.unique(sentences)
+                self.all_sentences.append(sentences.tolist())
+
+                if i % 100 == 0:
+                    elapsed_time = time() - start_time
+                    print("{}/{} elapsed time: {}".format(i + 1, num_clusters, timedelta(seconds=elapsed_time)))
+
+            elapsed_time = time() - start_time
+            print("{}/{} total elapsed time: {}".format(i + 1, num_clusters, timedelta(seconds=elapsed_time)))
+
+            print('save all_sentences.npy')
+            with open(self.default_path + 'data/all_sentences.json', 'w') as outfile:
+                json.dump(self.all_sentences, outfile)
+            #     np.save(default_path + 'data/all_sentences.npy', all_sentences)
+
+            self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
+
+        else:
+            with open(self.default_path + 'data/all_sentences.json') as infile:
+                self.all_sentences = json.load(infile)
+
+    ###############################
+    #  step
+    ###############################
+    def step_find_closest_sentences_to_question(self):
+        pass
+
+    ###############################
+    #  step
+    ###############################
+
+    ###############################
+    ###############################
+    ###############################
+
+    ###############################
+    # extract embedings
+    ###############################
 
     def get_embedings(self, strings, verbose=0):
         embeddings = np.array([])
@@ -202,34 +382,6 @@ class ArticleGenerator:
             print("total elapsed time:", timedelta(seconds=elapsed_time))
 
         return final_clusters, closest
-
-    def step_clusterize_questions(self):
-        num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
-
-        def fill_by_questions(q):
-            i = np.where(unique_questions == q)
-            return questions_clusters[i[0][0]]
-
-        if self.STAGE < 2:
-
-            unique_questions = np.unique(self.questions)
-
-            questions_clusters, center_indexes = self.clusterize_it(unique_questions,
-                                                                    self.CLUSTER_ALGORITHM,
-                                                                    num_clusters,
-                                                                    verbose=1)
-
-            s1 = pd.Series(self.questions, name='question')
-            s2 = pd.Series(s1.apply(fill_by_questions), name='cluster_id')
-
-            self.clustered_questions_df = pd.concat([self.data_df['id'], s1, s2], axis=1)
-            self.clustered_questions_df.to_csv(self.default_path + 'data/clustered_questions_df.csv')
-
-        else:
-            self.clustered_questions_df = pd.read_csv(self.default_path + 'data/clustered_questions_df.csv')
-
-        self.data_df['question_cluster_id'] = self.clustered_questions_df['cluster_id']
-        return self.clustered_questions_df
 
     ###############################
     # generate texts using GPT-2
@@ -346,75 +498,55 @@ class ArticleGenerator:
 
             return texts
 
-    def step_generate_questions_texts(self, START_STEP):
-        question_clusters_ids = self.clustered_questions_df['cluster_id']
-        question_clusters_ids = np.unique(question_clusters_ids)
-        print('question_clusters_ids', len(question_clusters_ids))
-        typical_questions = []
+    ###############################
+    # process texts
+    ###############################
 
-        for cluster_id in question_clusters_ids:
-            typical_question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
-            # non-clustered
-            if cluster_id == -1:
-                for q in typical_question:
-                    typical_questions.append(q)
-            else:
-                if len(typical_question) > 0:
-                    typical_questions.append(typical_question[0])
+    def is_too_short(self, x):
+        return len(x) < 4
 
-        print("num typical_questions:", len(typical_questions))
-        typical_questions = np.unique(typical_questions)
+    def fill_df_with_texts(self, df):
 
-        print("num typical_questions:", len(typical_questions))
+        start_time = time()
+        # we do it in a iteration way
+        ids = df['id'].values
+        i = 0
+        for id in ids:
+            with open(self.default_path + 'data/texts/' + str(id) + '.txt') as reader:
+                #             print("read " + str(id) + '.txt ...')
+                text = reader.read()
+                df.loc[df['id'] == id, ['text']] = text
 
-        if START_STEP == 0:
-            texts = [''] * len(typical_questions)
-            s1 = pd.Series(typical_questions, name='question')
-            s2 = pd.Series(texts, name='text')
-            self.gpt_questions_df = pd.concat([s1, s2], axis=1)
-        else:
-            self.gpt_questions_df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
+                i += 1
+                if i % 500 == 0:
+                    elapsed_time = time() - start_time
+                    print("{}/{} elapsed time: {}".format(i, len(ids), timedelta(seconds=elapsed_time)))
 
-        if START_STEP == len(question_clusters_ids):
-            texts = self.interact_model(typical_questions, df, START_STEP,
-                                   model_name='345M', seed=77, top_k=40, verbose=1)
+        elapsed_time = time() - start_time
+        print("elapsed time:", timedelta(seconds=elapsed_time))
 
-        return self.gpt_questions_df
+        return df
 
-    def step_merge_texts_to_questions(self):
+    def extract_sentences(self, df, ids):
+        # Note: think about mapping functions to make it in parallel way
+        all_sentences = []
+        for text_id in ids:
+            text = df[df['id'] == text_id]['text'].values[0]
+            #         sentences = np.array(text.split('\n'))
+            sentences = np.array(re.split('\; |\. |\? |\! |\n', text))
+            #         print("total sentences num:", len(sentences))
+            #         print("short sentences num", len(sentences[[is_too_short(x) for x in sentences]]))
 
-        clustered_questions_df = self.clustered_questions_df
-        gpt_questions_df = self.gpt_questions_df
+            sentences = sentences[[not self.is_too_short(x) for x in sentences]]
+            df.at[df.loc[df['id'] == text_id].index[0], 'split_sentences'] = json.dumps(sentences.tolist())
 
-        def fill_by_cluster_ids(q):
-            cluster_id = clustered_questions_df[clustered_questions_df['question'] == q]['cluster_id'].values
+            #         print("short sentences after clean", len(sentences[[is_too_short(x) for x in sentences]]))
+            #         print("cleaned sentences num:", len(sentences))
 
-            if len(cluster_id) > 0:
-                return cluster_id[0]
+            #         print()
+            all_sentences.extend(sentences)
 
-            return -2
-
-        self.gpt_questions_df['cluster_id'] = self.gpt_questions_df['question'].apply(fill_by_cluster_ids)
-
-        #
-
-        def fill_by_texts(question):
-            text = gpt_questions_df[gpt_questions_df['question'] == question]['text'].values
-
-            if len(text) > 0:
-                return text[0]
-
-            cluster_id = clustered_questions_df[clustered_questions_df['question'] == question]['cluster_id'].values
-
-            if len(cluster_id) > 0:
-                text = gpt_questions_df[gpt_questions_df['cluster_id'] == cluster_id[0]]['text'].values
-
-                if len(text) > 0:
-                    return text[0]
-
-            return ''
-
-        self.clustered_questions_df['text'] = self.clustered_questions_df['question'].apply(fill_by_texts)
+        return all_sentences
 
     def save_articles(self, articles_by_question):
         articles_by_question.to_csv(self.default_path + 'data/articles_by_question.csv')
