@@ -490,17 +490,15 @@ class ArticleGenerator:
 
                     elapsed_time = time() - start_time
                     if verbose > 0:
-                        print("step", (step), "from", num_steps, ", elapsed time", timedelta(seconds=elapsed_time))
+                        print("step", step, "from", num_steps, ", elapsed time", timedelta(seconds=elapsed_time))
 
                     save_df['question'] = strings
                     save_df['text'] = texts
                     save_df.to_csv(self.default_path + 'data/gpt_questions_df.csv')
 
-
-
             elapsed_time = time() - start_time
             if verbose > 0:
-                print ("step", (step), "from", num_steps, ", total elapsed time", timedelta(seconds=elapsed_time))
+                print("last step from", num_steps, ", total elapsed time", timedelta(seconds=elapsed_time))
 
             save_df['question'] = strings
             save_df['text'] = texts
