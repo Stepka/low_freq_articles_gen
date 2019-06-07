@@ -272,7 +272,9 @@ class ArticleGenerator:
                 print(len(sentences))
                 print(closest)
                 sentences = np.array(sentences)
-                sentences[np.array(closest)]
+                closest = np.array(closest)
+                closest = closest[closest < len(sentences)]
+                sentences[closest]
 
     ###############################
     #  step
