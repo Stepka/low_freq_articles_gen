@@ -260,6 +260,7 @@ class ArticleGenerator:
     #  step
     ###############################
     def step_find_closest_sentences_to_question(self):
+        self.clustered_questions_df['closest_sentences'] = ""
         start_time = time()
         num_clusters = len(self.all_sentences)
         for cluster_id in range(num_clusters):
@@ -272,7 +273,7 @@ class ArticleGenerator:
                 sentences = np.array(sentences)
                 closest = np.array(closest)
                 closest = closest[closest < len(sentences)]
-                self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['closest_sentences'] = sentences[closest]
+                self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['closest_sentences'] = json.dumps(sentences[closest])
 
             if cluster_id % 100 == 0:
                 elapsed_time = time() - start_time
