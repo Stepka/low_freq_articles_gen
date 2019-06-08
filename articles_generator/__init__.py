@@ -265,7 +265,6 @@ class ArticleGenerator:
         start_all_time = time()
         num_clusters = len(self.all_sentences)
         for cluster_id in range(num_clusters):
-            gc.collect()
             start_time = time()
 
             sentences = self.all_sentences[cluster_id]
@@ -277,16 +276,18 @@ class ArticleGenerator:
                 sentences = np.array(sentences)
                 closest = np.array(closest)
                 closest = closest[closest < len(sentences)]
-                # self.clustered_questions_df.loc[
-                #     self.clustered_questions_df['cluster_id'] == cluster_id,
-                #     ['closest_sentences']
-                # ] = json.dumps(sentences[closest].tolist())
+                self.clustered_questions_df.loc[
+                    self.clustered_questions_df['cluster_id'] == cluster_id,
+                    ['closest_sentences']
+                ] = json.dumps(sentences[closest].tolist())
 
-            # if cluster_id % 100 == 0:
             elapsed_time = time() - start_time
             total_elapsed_time = time() - start_all_time
             print('cluster_id:', cluster_id, "num sentences:", len(sentences))
             print("{}/{} elapsed time: {}, total time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time), timedelta(seconds=total_elapsed_time)))
+
+            if cluster_id % 10 == 0:
+                gc.collect()
 
     ###############################
     #  step
