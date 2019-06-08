@@ -7,6 +7,7 @@ from datetime import timedelta
 import os
 import random
 import json
+import gc
 
 import pandas as pd
 import numpy as np
@@ -264,7 +265,9 @@ class ArticleGenerator:
         start_all_time = time()
         num_clusters = len(self.all_sentences)
         for cluster_id in range(num_clusters):
+            gc.collect()
             start_time = time()
+            
             sentences = self.all_sentences[cluster_id]
             question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
             if len(question) > 0 and len(sentences):
@@ -281,7 +284,7 @@ class ArticleGenerator:
 
             # if cluster_id % 100 == 0:
             elapsed_time = time() - start_time
-            total_elapsed_time = time() - start_time
+            total_elapsed_time = time() - start_all_time
             print('cluster_id:', cluster_id, "num sentences:", len(sentences))
             print("{}/{} elapsed time: {}, total time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time), timedelta(seconds=total_elapsed_time)))
 
