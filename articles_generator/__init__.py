@@ -273,7 +273,10 @@ class ArticleGenerator:
                 sentences = np.array(sentences)
                 closest = np.array(closest)
                 closest = closest[closest < len(sentences)]
-                self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['closest_sentences'] = json.dumps(sentences[closest].tolist())
+                self.clustered_questions_df.loc[
+                    self.clustered_questions_df['cluster_id'] == cluster_id,
+                    ['closest_sentences']
+                ] = json.dumps(sentences[closest].tolist())
 
             if cluster_id % 100 == 0:
                 elapsed_time = time() - start_time
