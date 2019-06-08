@@ -278,10 +278,10 @@ class ArticleGenerator:
                     ['closest_sentences']
                 ] = json.dumps(sentences[closest].tolist())
 
-            if cluster_id % 100 == 0:
-                elapsed_time = time() - start_time
-                print('cluster_id: ', cluster_id)
-                print("{}/{} elapsed time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time)))
+            # if cluster_id % 100 == 0:
+            elapsed_time = time() - start_time
+            print('cluster_id: ', cluster_id)
+            print("{}/{} elapsed time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time)))
 
     ###############################
     #  step
