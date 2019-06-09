@@ -310,7 +310,7 @@ class ArticleGenerator:
     def step_find_closest_sentences_to_question(self):
         if self.verbose > 0:
             print(self.checkpoint)
-            
+
         # self.clustered_questions_df['closest_sentences'] = ""
         start_all_time = time()
         num_clusters = len(self.all_sentences)
@@ -706,8 +706,10 @@ class ArticleGenerator:
             json.dump(self.checkpoint, outfile)
 
     def load_checkpoint(self):
-        with open(self.default_path + 'data/checkpoint.json') as infile:
-            self.checkpoint = json.load(infile)
+        exists = os.path.isfile(self.default_path + 'data/checkpoint.json')
+        if exists:
+            with open(self.default_path + 'data/checkpoint.json') as infile:
+                self.checkpoint = json.load(infile)
 
     def clear_checkpoint(self):
         self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0}
