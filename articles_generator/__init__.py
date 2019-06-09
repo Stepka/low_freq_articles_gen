@@ -267,6 +267,7 @@ class ArticleGenerator:
         total_all_sentences = []
         total_all_indexes = []
         total_all_questions = []
+        questions_indexes = []
         last_index = 0
         for cluster_id in range(num_clusters):
             total_all_sentences.extend(self.all_sentences[cluster_id])
@@ -276,8 +277,9 @@ class ArticleGenerator:
             question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
             if len(question) > 0:
                 total_all_questions.append(question[0])
+                questions_indexes.append(len(total_all_questions) - 1)
             else:
-                total_all_questions.append(None)
+                questions_indexes.append(None)
 
         print("Num all sentences:", len(total_all_sentences))
         start_time = time()
@@ -294,9 +296,11 @@ class ArticleGenerator:
             for i in sentences_indexes:
                 sentences.append(total_all_sentences_embeddings[i])
 
-            question = questions_embeddings[cluster_id]
+            question = None
+            if questions_indexes[cluster_id] is not None:
+                question = questions_embeddings[questions_indexes[cluster_id]]
 
-            if question is not None and len(question) > 0 and len(sentences) > 0:
+            if question is not None and len(sentences) > 0:
                 closest = self.find_closest_to(sentences, question, 20)
                 sentences = np.array(sentences)
                 closest = np.array(closest)
