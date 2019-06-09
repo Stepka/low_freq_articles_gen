@@ -267,12 +267,17 @@ class ArticleGenerator:
         total_all_sentences = []
         total_all_indexes = []
         total_all_questions = []
+        total_all_questions_indexes = []
         for cluster_id in range(num_clusters):
             total_all_sentences.extend(self.all_sentences[cluster_id])
             total_all_indexes.append(len(self.all_sentences[cluster_id]))
 
             question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
-            total_all_questions.append(question)
+            if len(question) > 0:
+                total_all_questions.append(question[0])
+                total_all_questions_indexes.append(1)
+            else:
+                total_all_questions_indexes.append(0)
 
         print("Num all sentences:", len(total_all_sentences))
         start_time = time()
