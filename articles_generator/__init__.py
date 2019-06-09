@@ -60,6 +60,8 @@ class ArticleGenerator:
 
         self.BATCH_SIZE = 1000
 
+        self.verbose = 1
+
         self.data_df = None
         self.questions = None
         self.embed_module = None
@@ -74,6 +76,9 @@ class ArticleGenerator:
     # STEP 1: load main dataframe, extract questions
     ###############################
     def step_load_data(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+
         if self.checkpoint['STAGE'] < 1:
             self.data_df = pd.read_csv(self.default_path + 'data/meta.csv')
             self.data_df['text'] = ""
@@ -92,6 +97,9 @@ class ArticleGenerator:
     # Universal Sentence Encoder used for convert sentences to 512 dimensional float (-1, 1) vectors
     ###############################
     def step_prepare_tf_hub(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+
         # Import the Universal Sentence Encoder's TF Hub module
         self.embed_module = hub.Module(self.module_url)
 
@@ -109,6 +117,9 @@ class ArticleGenerator:
     # Then field cluster_id from clustered_questions_df connect to field question_cluster_id from main dataframe.
     ###############################
     def step_clusterize_questions(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+
         num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
 
         def fill_by_questions(q):
@@ -145,6 +156,9 @@ class ArticleGenerator:
     # Here we take any question from cluster, pass it to GPT-2 and save text to gpt_questions_df
     ###############################
     def step_generate_questions_texts(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+
         question_clusters_ids = self.clustered_questions_df['cluster_id']
         question_clusters_ids = np.unique(question_clusters_ids)
         print('question_clusters_ids', len(question_clusters_ids))
@@ -188,6 +202,8 @@ class ArticleGenerator:
     # Save it to clustered_questions_df
     ###############################
     def step_merge_texts_to_questions(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
 
         clustered_questions_df = self.clustered_questions_df
         gpt_questions_df = self.gpt_questions_df
@@ -229,6 +245,9 @@ class ArticleGenerator:
     # STEP 6
     ###############################
     def step_load_texts(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+
         if self.checkpoint['STAGE'] < 6:
             self.fill_df_with_texts(self.data_df)
 
@@ -239,6 +258,9 @@ class ArticleGenerator:
     # STEP 7
     ###############################
     def step_extract_sentences(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+
         if self.checkpoint['STAGE'] < 7:
             self.all_sentences = []
 
@@ -286,6 +308,9 @@ class ArticleGenerator:
     # STEP 8
     ###############################
     def step_find_closest_sentences_to_question(self):
+        if self.verbose > 0:
+            print(self.checkpoint)
+            
         # self.clustered_questions_df['closest_sentences'] = ""
         start_all_time = time()
         num_clusters = len(self.all_sentences)
@@ -683,4 +708,8 @@ class ArticleGenerator:
     def load_checkpoint(self):
         with open(self.default_path + 'data/checkpoint.json') as infile:
             self.checkpoint = json.load(infile)
+
+    def clear_checkpoint(self):
+        self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0}
+        self.save_checkpoint()
 
