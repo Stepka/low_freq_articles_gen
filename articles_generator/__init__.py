@@ -53,7 +53,6 @@ class ArticleGenerator:
         # 4 - sentences already sub-clusterized and stored to clustered_sentences
         # 5 - structure of texts is extracted and stored to data_df (meta_with_texts.csv)
         # 6 - data, articles and model ready
-        self.STAGE = 1 #@param [0, 1, 2, 3, 4, 5, 6] {type:"raw"}
         self.CLUSTER_ALGORITHM = "DBSCAN" #@param ["KMeans", "AffProp", "DBSCAN"]
 
         self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER = 50
@@ -65,21 +64,27 @@ class ArticleGenerator:
         self.questions = None
         self.embed_module = None
         self.clustered_questions_df = None
-        self.START_STEP = 0
         self.gpt_questions_df = None
         self.all_sentences = None
+        self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0}
+
+        self.load_checkpoint()
 
     ###############################
     # STEP 1: load main dataframe, extract questions
     ###############################
     def step_load_data(self):
-        if self.STAGE < 1:
+        if self.checkpoint['STAGE'] < 1:
             self.data_df = pd.read_csv(self.default_path + 'data/meta.csv')
             self.data_df['text'] = ""
         else:
             self.data_df = pd.read_csv(self.default_path + 'data/meta_with_texts.csv')
 
         self.questions = self.data_df['question']
+
+        self.checkpoint['STAGE'] = 1
+        self.save_checkpoint()
+
         return self.data_df
 
     ###############################
@@ -92,6 +97,9 @@ class ArticleGenerator:
 
         # Reduce logging output.
         tf.logging.set_verbosity(tf.logging.ERROR)
+
+        self.checkpoint['STAGE'] = 2
+        self.save_checkpoint()
 
         return self.embed_module
 
@@ -107,7 +115,7 @@ class ArticleGenerator:
             i = np.where(unique_questions == q)
             return questions_clusters[i[0][0]]
 
-        if self.STAGE < 2:
+        if self.checkpoint['STAGE'] < 3:
 
             unique_questions = np.unique(self.questions)
 
@@ -126,13 +134,17 @@ class ArticleGenerator:
             self.clustered_questions_df = pd.read_csv(self.default_path + 'data/clustered_questions_df.csv')
 
         self.data_df['question_cluster_id'] = self.clustered_questions_df['cluster_id']
+
+        self.checkpoint['STAGE'] = 3
+        self.save_checkpoint()
+
         return self.clustered_questions_df
 
     ###############################
     # STEP 4: generate texts for question's clusters
     # Here we take any question from cluster, pass it to GPT-2 and save text to gpt_questions_df
     ###############################
-    def step_generate_questions_texts(self, START_STEP):
+    def step_generate_questions_texts(self):
         question_clusters_ids = self.clustered_questions_df['cluster_id']
         question_clusters_ids = np.unique(question_clusters_ids)
         print('question_clusters_ids', len(question_clusters_ids))
@@ -153,7 +165,8 @@ class ArticleGenerator:
 
         print("num typical_questions:", len(typical_questions))
 
-        if START_STEP == 0:
+        start_step = self.checkpoint['GENERATE_TEXTS_START_STEP']
+        if start_step == 0:
             texts = [''] * len(typical_questions)
             s1 = pd.Series(typical_questions, name='question')
             s2 = pd.Series(texts, name='text')
@@ -161,9 +174,12 @@ class ArticleGenerator:
         else:
             self.gpt_questions_df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
 
-        if START_STEP == len(question_clusters_ids):
-            texts = self.interact_model(typical_questions, self.gpt_questions_df, START_STEP,
+        if start_step == len(question_clusters_ids):
+            texts = self.interact_model(typical_questions, self.gpt_questions_df, start_step,
                                         model_name='345M', seed=77, top_k=40, verbose=1)
+
+        self.checkpoint['STAGE'] = 4
+        self.save_checkpoint()
 
         return self.gpt_questions_df
 
@@ -206,18 +222,24 @@ class ArticleGenerator:
 
         self.clustered_questions_df['text'] = self.clustered_questions_df['question'].apply(fill_by_texts)
 
-    ###############################
-    #  step
-    ###############################
-    def step_load_texts(self):
-        if self.STAGE < 1:
-            self.fill_df_with_texts(self.data_df)
+        self.checkpoint['STAGE'] = 5
+        self.save_checkpoint()
 
     ###############################
-    #  step
+    # STEP 6
+    ###############################
+    def step_load_texts(self):
+        if self.checkpoint['STAGE'] < 6:
+            self.fill_df_with_texts(self.data_df)
+
+        self.checkpoint['STAGE'] = 6
+        self.save_checkpoint()
+
+    ###############################
+    # STEP 7
     ###############################
     def step_extract_sentences(self):
-        if self.STAGE < 3:
+        if self.checkpoint['STAGE'] < 7:
             self.all_sentences = []
 
             start_time = time()
@@ -257,8 +279,11 @@ class ArticleGenerator:
             with open(self.default_path + 'data/all_sentences.json') as infile:
                 self.all_sentences = json.load(infile)
 
+        self.checkpoint['STAGE'] = 7
+        self.save_checkpoint()
+
     ###############################
-    #  step
+    # STEP 8
     ###############################
     def step_find_closest_sentences_to_question(self):
         # self.clustered_questions_df['closest_sentences'] = ""
@@ -331,9 +356,8 @@ class ArticleGenerator:
             timedelta(seconds=total_elapsed_time)
         ))
 
-    ###############################
-    #  step
-    ###############################
+        self.checkpoint['STAGE'] = 8
+        self.save_checkpoint()
 
     ###############################
     ###############################
@@ -565,6 +589,8 @@ class ArticleGenerator:
                     save_df['question'] = strings
                     save_df['text'] = texts
                     save_df.to_csv(self.default_path + 'data/gpt_questions_df.csv')
+                    self.checkpoint['GENERATE_TEXTS_START_STEP'] = step
+                    self.save_checkpoint()
 
             elapsed_time = time() - start_time
             if verbose > 0:
@@ -599,6 +625,8 @@ class ArticleGenerator:
                 if i % 500 == 0:
                     elapsed_time = time() - start_time
                     print("{}/{} elapsed time: {}".format(i, len(ids), timedelta(seconds=elapsed_time)))
+
+                    gc.collect()
 
         elapsed_time = time() - start_time
         print("elapsed time:", timedelta(seconds=elapsed_time))
@@ -647,3 +675,12 @@ class ArticleGenerator:
 
     def save_articles(self, articles_by_question):
         articles_by_question.to_csv(self.default_path + 'data/articles_by_question.csv')
+
+    def save_checkpoint(self):
+        with open(self.default_path + 'data/checkpoint.json', 'w') as outfile:
+            json.dump(self.checkpoint, outfile)
+
+    def load_checkpoint(self):
+        with open(self.default_path + 'data/checkpoint.json') as infile:
+            self.checkpoint = json.load(infile)
+
