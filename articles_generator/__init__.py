@@ -314,11 +314,14 @@ class ArticleGenerator:
                 ] = json.dumps(sentences[closest].tolist())
 
             elapsed_time = time() - start_time
-            total_elapsed_time = time() - start_all_time
-            print('cluster_id:', cluster_id, "num sentences:", len(sentences))
-            print("{}/{} elapsed time: {}, total time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time), timedelta(seconds=total_elapsed_time)))
+            if cluster_id % 100 == 0:
+                total_elapsed_time = time() - start_all_time
+                print('cluster_id:', cluster_id, "num sentences:", len(sentences))
+                print("{}/{} elapsed time: {}, total time: {}".format(cluster_id,
+                                                                      num_clusters,
+                                                                      timedelta(seconds=elapsed_time),
+                                                                      timedelta(seconds=total_elapsed_time)))
 
-            if cluster_id % 10 == 0:
                 gc.collect()
 
     ###############################
