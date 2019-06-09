@@ -118,7 +118,6 @@ class ArticleGenerator:
             unique_questions = np.unique(self.questions)
 
             questions_clusters = self.clusterize_it(unique_questions,
-                                                    self.CLUSTER_ALGORITHM,
                                                     verbose=self.verbose)
 
             s1 = pd.Series(self.questions, name='question')
@@ -401,7 +400,7 @@ class ArticleGenerator:
 
                     elapsed_time = time() - start_time
                     if verbose > 0:
-                        print ("step", (i+1), "from", num_steps, ", elapsed time", timedelta(seconds=elapsed_time))
+                        print("step", (i+1), "from", num_steps, ", elapsed time", timedelta(seconds=elapsed_time))
 
         return embeddings
 
