@@ -272,14 +272,14 @@ class ArticleGenerator:
             if len(question) > 0 and len(sentences):
                 question = question[0]
 
-                closest = self.find_closest_to(sentences, question, 20)
-                sentences = np.array(sentences)
-                closest = np.array(closest)
-                closest = closest[closest < len(sentences)]
-                self.clustered_questions_df.loc[
-                    self.clustered_questions_df['cluster_id'] == cluster_id,
-                    ['closest_sentences']
-                ] = json.dumps(sentences[closest].tolist())
+                self.find_closest_to(sentences, question, 20)
+                # sentences = np.array(sentences)
+                # closest = np.array(closest)
+                # closest = closest[closest < len(sentences)]
+                # self.clustered_questions_df.loc[
+                #     self.clustered_questions_df['cluster_id'] == cluster_id,
+                #     ['closest_sentences']
+                # ] = json.dumps(sentences[closest].tolist())
 
             elapsed_time = time() - start_time
             total_elapsed_time = time() - start_all_time
@@ -595,13 +595,13 @@ class ArticleGenerator:
         embeddings_for_strings = self.get_embedings(strings, verbose=0)
         embeddings_for_target = self.get_embedings([target], verbose=0)
 
-        closest = cKDTree(embeddings_for_strings).query(embeddings_for_target[0], k=num_closest)[1]
+        # closest = cKDTree(embeddings_for_strings).query(embeddings_for_target[0], k=num_closest)[1]
 
         elapsed_time = time() - start_time
         if verbose > 0:
             print("total elapsed time:", timedelta(seconds=elapsed_time))
 
-        return closest
+        # return closest
 
     def save_articles(self, articles_by_question):
         articles_by_question.to_csv(self.default_path + 'data/articles_by_question.csv')
