@@ -264,30 +264,42 @@ class ArticleGenerator:
         self.clustered_questions_df['closest_sentences'] = ""
         start_all_time = time()
         num_clusters = len(self.all_sentences)
+        all_sentences = []
+        all_indexes = []
         for cluster_id in range(num_clusters):
-            start_time = time()
+            all_sentences.extend(self.all_sentences[cluster_id])
+            all_indexes.append(len(self.all_sentences[cluster_id]))
 
-            sentences = self.all_sentences[cluster_id]
-            question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
-            if len(question) > 0 and len(sentences):
-                question = question[0]
+        print("Num sentences:", len(all_sentences))
+        start_time = time()
+        embeddings_for_strings = self.get_embedings(all_sentences, verbose=0)
+        elapsed_time = time() - start_time
+        print("elapsed time: {}".format(timedelta(seconds=elapsed_time)))
 
-                self.find_closest_to(sentences, question, 20)
-                # sentences = np.array(sentences)
-                # closest = np.array(closest)
-                # closest = closest[closest < len(sentences)]
-                # self.clustered_questions_df.loc[
-                #     self.clustered_questions_df['cluster_id'] == cluster_id,
-                #     ['closest_sentences']
-                # ] = json.dumps(sentences[closest].tolist())
-
-            elapsed_time = time() - start_time
-            total_elapsed_time = time() - start_all_time
-            print('cluster_id:', cluster_id, "num sentences:", len(sentences))
-            print("{}/{} elapsed time: {}, total time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time), timedelta(seconds=total_elapsed_time)))
-
-            if cluster_id % 10 == 0:
-                gc.collect()
+        # for cluster_id in range(num_clusters):
+        #     start_time = time()
+        #
+        #     sentences = self.all_sentences[cluster_id]
+        #     question = self.clustered_questions_df[self.clustered_questions_df['cluster_id'] == cluster_id]['question'].values
+        #     if len(question) > 0 and len(sentences):
+        #         question = question[0]
+        #
+        #         closest = self.find_closest_to(sentences, question, 20)
+        #         sentences = np.array(sentences)
+        #         closest = np.array(closest)
+        #         closest = closest[closest < len(sentences)]
+        #         self.clustered_questions_df.loc[
+        #             self.clustered_questions_df['cluster_id'] == cluster_id,
+        #             ['closest_sentences']
+        #         ] = json.dumps(sentences[closest].tolist())
+        #
+        #     elapsed_time = time() - start_time
+        #     total_elapsed_time = time() - start_all_time
+        #     print('cluster_id:', cluster_id, "num sentences:", len(sentences))
+        #     print("{}/{} elapsed time: {}, total time: {}".format(cluster_id, num_clusters, timedelta(seconds=elapsed_time), timedelta(seconds=total_elapsed_time)))
+        #
+        #     if cluster_id % 10 == 0:
+        #         gc.collect()
 
     ###############################
     #  step
@@ -595,13 +607,13 @@ class ArticleGenerator:
         embeddings_for_strings = self.get_embedings(strings, verbose=0)
         embeddings_for_target = self.get_embedings([target], verbose=0)
 
-        # closest = cKDTree(embeddings_for_strings).query(embeddings_for_target[0], k=num_closest)[1]
+        closest = cKDTree(embeddings_for_strings).query(embeddings_for_target[0], k=num_closest)[1]
 
         elapsed_time = time() - start_time
         if verbose > 0:
             print("total elapsed time:", timedelta(seconds=elapsed_time))
 
-        # return closest
+        return closest
 
     def save_articles(self, articles_by_question):
         articles_by_question.to_csv(self.default_path + 'data/articles_by_question.csv')
