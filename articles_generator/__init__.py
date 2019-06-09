@@ -288,6 +288,9 @@ class ArticleGenerator:
         elapsed_time = time() - start_time
         print("elapsed time: {}".format(timedelta(seconds=elapsed_time)))
 
+        if 'closest_sentences' not in self.clustered_questions_df.columns:
+            self.clustered_questions_df['closest_sentences'] = ''
+
         for cluster_id in range(num_clusters):
             start_time = time()
             
