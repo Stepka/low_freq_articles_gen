@@ -44,20 +44,9 @@ class ArticleGenerator:
 
         self.module_url = "https://tfhub.dev/google/universal-sentence-encoder-large/3" #@param ["https://tfhub.dev/google/universal-sentence-encoder/2", "https://tfhub.dev/google/universal-sentence-encoder-large/3"]
 
-        # PARSE_TXT_FILES = False #@param ["True", "False"] {type:"raw"}
-        # LOAD_PROCESSED_SENTENCES = True #@param ["True", "False"] {type:"raw"}
-        # 0 - no data
-        # 1 - TXT files already parsed to data_df
-        # 2 - questions already processed and stored to clustered_questions_df
-        # 3 - sentences already extracted and stored to meta_with_texts.csv and all_sentences.json
-        # 4 - sentences already sub-clusterized and stored to clustered_sentences
-        # 5 - structure of texts is extracted and stored to data_df (meta_with_texts.csv)
-        # 6 - data, articles and model ready
-        self.CLUSTER_ALGORITHM = "DBSCAN" #@param ["KMeans", "AffProp", "DBSCAN"]
-
-        self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER = 50
-        self.AVG_EXPECTED_SENTENCES_PER_CLUSTER = 5
-
+        self.MAX_CLUSTER_SIZE = 250
+        self.BASE_DBSCAN_EPS = 0.4
+        self.DBSCAN_EPS_MULT_STEP = 0.3
         self.BATCH_SIZE = 1000
 
         self.verbose = 1
@@ -120,8 +109,6 @@ class ArticleGenerator:
         if self.verbose > 0:
             print(self.checkpoint)
 
-        num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
-
         def fill_by_questions(q):
             i = np.where(unique_questions == q)
             return questions_clusters[i[0][0]]
@@ -130,10 +117,9 @@ class ArticleGenerator:
 
             unique_questions = np.unique(self.questions)
 
-            questions_clusters, center_indexes = self.clusterize_it(unique_questions,
-                                                                    self.CLUSTER_ALGORITHM,
-                                                                    num_clusters,
-                                                                    verbose=self.verbose)
+            questions_clusters = self.clusterize_it(unique_questions,
+                                                    self.CLUSTER_ALGORITHM,
+                                                    verbose=self.verbose)
 
             s1 = pd.Series(self.questions, name='question')
             s2 = pd.Series(s1.apply(fill_by_questions), name='cluster_id')
@@ -261,7 +247,6 @@ class ArticleGenerator:
 
             start_time = time()
 
-            # num_clusters = int(len(self.questions) / self.AVG_EXPECTED_QUESTIONS_PER_CLUSTER)
             num_clusters = np.max(self.clustered_questions_df['cluster_id']) + 1
 
             text_ids = []
@@ -424,98 +409,77 @@ class ArticleGenerator:
     # clusterization based on their embedings [K-Means]
     ###############################
 
-    def clusterize_it(self, strings, algorithm, num_clusters, verbose=0):
+    def clusterize_it(self, strings, verbose=0):
 
         embeddings = self.get_embedings(strings, verbose=0)
 
         start_time = time()
 
-        if algorithm == 'KMeans':
-            kmeans = KMeans(n_clusters=num_clusters, verbose=0).fit(embeddings)
+        samples = embeddings
+        multiplicator = 1
+        all_done = False
+        final_clusters = [-1] * len(embeddings)
+        search_indexes = [x for x in range(len(embeddings))]
+        search_indexes = np.array(search_indexes)
+        last_cluster_id = 0
+        while not all_done:
+            if verbose > 1:
+                print('multiplicator:', multiplicator)
+            clustering = DBSCAN(eps=self.BASE_DBSCAN_EPS/multiplicator, min_samples=2).fit(samples)
+            clusters = clustering.labels_
 
-            clusters = kmeans.predict(embeddings)
+            # exclude cluster ids == -1
+            masking = clusters >= 0
+            clusters = clusters + masking * last_cluster_id
 
-            closest, _ = pairwise_distances_argmin_min(kmeans.cluster_centers_, embeddings)
+            unique, counts = np.unique(clusters, return_counts=True)
 
-        elif algorithm == 'DBSCAN':
+            if verbose > 1:
+                print('counts', counts)
+                print('unique', unique)
 
-            MAX_CLUSTER_SIZE = 250
+            last_cluster_id = np.max(unique) + 1
 
-            samples = embeddings
-            multiplicator = 1
-            all_done = False
-            final_clusters = [-1] * len(embeddings)
-            search_indexes = [x for x in range(len(embeddings))]
-            search_indexes = np.array(search_indexes)
-            last_cluster_id = 0
-            while not all_done:
-                if verbose > 1:
-                    print('multiplicator:', multiplicator)
-                clustering = DBSCAN(eps=0.4/multiplicator, min_samples=2).fit(samples)
-                clusters = clustering.labels_
-                closest = clustering.core_sample_indices_
+            repeat_indicies = []
+            all_done = True
+            for i in range(len(counts)):
+                if counts[i] > self.MAX_CLUSTER_SIZE:
+                    repeat_indicies.append(unique[i].item())
+                    if unique[i] != -1:
+                        all_done = False
 
-                # exclude cluster ids == -1
-                masking = clusters >= 0
-                clusters = clusters + masking * last_cluster_id
+            if verbose > 1:
+                print('repeat_indicies', repeat_indicies)
+            new_samples = []
+            new_search_indexes = []
+            for i in repeat_indicies:
+                new_samples.extend(samples[clusters == i].tolist())
+                new_search_indexes.extend(search_indexes[clusters == i].tolist())
 
-                unique, counts = np.unique(clusters, return_counts=True)
+            if verbose > 1:
+                print('new_search_indexes', new_search_indexes)
 
-                if verbose > 1:
-                    print('counts', counts)
-                    print('unique', unique)
+            for i in range(len(clusters)):
+                if clusters[i] not in repeat_indicies:
+                    j = search_indexes[i]
+                    final_clusters[j] = clusters[i]
 
-                last_cluster_id = np.max(unique) + 1
+            samples = np.array(new_samples)
+            search_indexes = np.array(new_search_indexes)
 
-                repeat_indicies = []
-                all_done = True
-                for i in range(len(counts)):
-                    if counts[i] > MAX_CLUSTER_SIZE:
-                        repeat_indicies.append(unique[i].item())
-                        if unique[i] != -1:
-                            all_done = False
+            multiplicator += self.DBSCAN_EPS_MULT_STEP
 
-                if verbose > 1:
-                    print('repeat_indicies', repeat_indicies)
-                new_samples = []
-                new_search_indexes = []
-                for i in repeat_indicies:
-                    new_samples.extend(samples[clusters == i].tolist())
-                    new_search_indexes.extend(search_indexes[clusters == i].tolist())
-
-                if verbose > 1:
-                    print('new_search_indexes', new_search_indexes)
-
-                # j = 0
-                for i in range(len(clusters)):
-                    if clusters[i] not in repeat_indicies:
-                        j = search_indexes[i]
-                        final_clusters[j] = clusters[i]
-                    #                     final_closest[j] = closest[i]
-
-                    # j += 1
-                    # if j < len(final_clusters):
-                    #     while final_clusters[j] != -1:
-                    #         j += 1
-                    #         if j >= len(final_clusters):
-                    #             break
-
-                samples = np.array(new_samples)
-                search_indexes = np.array(new_search_indexes)
-
-                multiplicator += 0.3
-
-            last_cluster_id = np.max(final_clusters) + 1
-            for i in range(len(final_clusters)):
-                if final_clusters[i] == -1:
-                    final_clusters[i] = last_cluster_id
-                    last_cluster_id += 1
+        last_cluster_id = np.max(final_clusters) + 1
+        for i in range(len(final_clusters)):
+            if final_clusters[i] == -1:
+                final_clusters[i] = last_cluster_id
+                last_cluster_id += 1
 
         elapsed_time = time() - start_time
         if verbose > 0:
             print("total elapsed time:", timedelta(seconds=elapsed_time))
 
-        return final_clusters, closest
+        return final_clusters
 
     ###############################
     # generate texts using GPT-2
