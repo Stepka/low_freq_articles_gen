@@ -133,7 +133,7 @@ class ArticleGenerator:
             questions_clusters, center_indexes = self.clusterize_it(unique_questions,
                                                                     self.CLUSTER_ALGORITHM,
                                                                     num_clusters,
-                                                                    verbose=1)
+                                                                    verbose=self.verbose)
 
             s1 = pd.Series(self.questions, name='question')
             s2 = pd.Series(s1.apply(fill_by_questions), name='cluster_id')
@@ -185,7 +185,7 @@ class ArticleGenerator:
             self.gpt_questions_df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
 
         self.interact_model(typical_questions, self.gpt_questions_df, start_step,
-                            model_name='345M', seed=77, top_k=40, verbose=1)
+                            model_name='345M', seed=77, top_k=40, verbose=self.verbose)
 
         self.checkpoint['STAGE'] = 4
         self.save_checkpoint()
@@ -441,7 +441,8 @@ class ArticleGenerator:
             multiplicator = 1
             all_done = False
             final_clusters = [-1] * len(embeddings)
-            final_closest = [-1] * len(embeddings)
+            search_indexes = [x for x in range(len(embeddings))]
+            search_indexes = np.array(search_indexes)
             last_cluster_id = 0
             while not all_done:
                 if verbose > 1:
@@ -450,17 +451,15 @@ class ArticleGenerator:
                 clusters = clustering.labels_
                 closest = clustering.core_sample_indices_
 
+                # exclude cluster ids == -1
                 masking = clusters >= 0
                 clusters = clusters + masking * last_cluster_id
-                #             closest = closest + masking * last_cluster_id
 
                 unique, counts = np.unique(clusters, return_counts=True)
 
                 if verbose > 1:
                     print('counts', counts)
                     print('unique', unique)
-                #             print('closest', closest)
-                #             print('closest', len(closest))
 
                 last_cluster_id = np.max(unique) + 1
 
@@ -475,23 +474,30 @@ class ArticleGenerator:
                 if verbose > 1:
                     print('repeat_indicies', repeat_indicies)
                 new_samples = []
+                new_search_indexes = []
                 for i in repeat_indicies:
                     new_samples.extend(samples[clusters == i].tolist())
+                    new_search_indexes.extend(search_indexes[clusters == i].tolist())
 
-                j = 0
+                if verbose > 1:
+                    print('new_search_indexes', new_search_indexes)
+
+                # j = 0
                 for i in range(len(clusters)):
                     if clusters[i] not in repeat_indicies:
+                        j = search_indexes[i]
                         final_clusters[j] = clusters[i]
                     #                     final_closest[j] = closest[i]
 
-                    j += 1
-                    if j < len(final_clusters):
-                        while final_clusters[j] != -1:
-                            j += 1
-                            if j >= len(final_clusters):
-                                break
+                    # j += 1
+                    # if j < len(final_clusters):
+                    #     while final_clusters[j] != -1:
+                    #         j += 1
+                    #         if j >= len(final_clusters):
+                    #             break
 
                 samples = np.array(new_samples)
+                search_indexes = np.array(new_search_indexes)
 
                 multiplicator += 0.3
 
