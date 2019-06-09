@@ -161,7 +161,6 @@ class ArticleGenerator:
 
         question_clusters_ids = self.clustered_questions_df['cluster_id']
         question_clusters_ids = np.unique(question_clusters_ids)
-        print('question_clusters_ids', len(question_clusters_ids))
         typical_questions = []
 
         for cluster_id in question_clusters_ids:
@@ -174,10 +173,7 @@ class ArticleGenerator:
                 if len(typical_question) > 0:
                     typical_questions.append(typical_question[0])
 
-        print("num typical_questions:", len(typical_questions))
         typical_questions = np.unique(typical_questions)
-
-        print("num typical_questions:", len(typical_questions))
 
         start_step = self.checkpoint['GENERATE_TEXTS_START_STEP']
         if start_step == 0:
@@ -188,9 +184,8 @@ class ArticleGenerator:
         else:
             self.gpt_questions_df = pd.read_csv(self.default_path + 'data/gpt_questions_df.csv')
 
-        if start_step == len(question_clusters_ids):
-            texts = self.interact_model(typical_questions, self.gpt_questions_df, start_step,
-                                        model_name='345M', seed=77, top_k=40, verbose=1)
+        self.interact_model(typical_questions, self.gpt_questions_df, start_step,
+                            model_name='345M', seed=77, top_k=40, verbose=1)
 
         self.checkpoint['STAGE'] = 4
         self.save_checkpoint()
