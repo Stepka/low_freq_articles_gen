@@ -239,7 +239,7 @@ class ArticleGenerator:
                 sentences = np.unique(sentences)
                 self.all_sentences.append(sentences.tolist())
 
-                if i % 100 == 0:
+                if i % 1000 == 0:
                     elapsed_time = time() - start_time
                     print("{}/{} elapsed time: {}".format(i + 1, num_clusters, timedelta(seconds=elapsed_time)))
 
@@ -305,13 +305,13 @@ class ArticleGenerator:
 
             if question is not None and len(sentences) > 0:
                 closest = self.find_closest_to(sentences, question, 20)
-                sentences = np.array(sentences)
+                sentences_text = np.array(self.all_sentences[cluster_id])
                 closest = np.array(closest)
-                closest = closest[closest < len(sentences)]
+                closest = closest[closest < len(sentences_text)]
                 self.clustered_questions_df.loc[
                     self.clustered_questions_df['cluster_id'] == cluster_id,
                     ['closest_sentences']
-                ] = json.dumps(sentences[closest].tolist())
+                ] = json.dumps(sentences_text[closest].tolist())
 
             elapsed_time = time() - start_time
             if cluster_id % 1000 == 0:
