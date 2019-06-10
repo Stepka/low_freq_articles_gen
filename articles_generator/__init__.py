@@ -35,12 +35,12 @@ from . import encoder
 
 class ArticleGenerator:
 
-    def __init__(self):
+    def __init__(self, default_path, verbose=1):
         ###############################
         # configuration
         ###############################
 
-        self.default_path = ""
+        self.default_path = default_path
 
         self.module_url = "https://tfhub.dev/google/universal-sentence-encoder-large/3" #@param ["https://tfhub.dev/google/universal-sentence-encoder/2", "https://tfhub.dev/google/universal-sentence-encoder-large/3"]
 
@@ -49,7 +49,7 @@ class ArticleGenerator:
         self.DBSCAN_EPS_MULT_STEP = 0.3
         self.BATCH_SIZE = 1000
 
-        self.verbose = 1
+        self.verbose = verbose
 
         self.data_df = None
         self.questions = None
