@@ -68,7 +68,7 @@ class ArticleGenerator:
         if self.verbose > 0:
             print(self.checkpoint)
 
-        if self.checkpoint['STAGE'] < 1:
+        if self.checkpoint['STAGE'] < 3:
             self.data_df = pd.read_csv(self.default_path + 'data/meta.csv')
             self.data_df['work_text'] = ""
         else:
@@ -133,6 +133,7 @@ class ArticleGenerator:
 
         self.checkpoint['STAGE'] = 3
         self.save_checkpoint()
+        self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
 
         return self.clustered_questions_df
 
@@ -233,6 +234,7 @@ class ArticleGenerator:
 
         self.checkpoint['STAGE'] = 6
         self.save_checkpoint()
+        self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
 
     ###############################
     # STEP 7
