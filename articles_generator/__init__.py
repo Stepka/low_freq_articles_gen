@@ -76,8 +76,9 @@ class ArticleGenerator:
 
         self.questions = self.data_df['question']
 
-        self.checkpoint['STAGE'] = 1
-        self.save_checkpoint()
+        if self.checkpoint['STAGE'] < 1:
+            self.checkpoint['STAGE'] = 1
+            self.save_checkpoint()
 
         return self.data_df
 
@@ -95,8 +96,9 @@ class ArticleGenerator:
         # Reduce logging output.
         tf.logging.set_verbosity(tf.logging.ERROR)
 
-        self.checkpoint['STAGE'] = 2
-        self.save_checkpoint()
+        if self.checkpoint['STAGE'] < 2:
+            self.checkpoint['STAGE'] = 2
+            self.save_checkpoint()
 
         return self.embed_module
 
@@ -131,9 +133,11 @@ class ArticleGenerator:
 
         self.data_df['question_cluster_id'] = self.clustered_questions_df['cluster_id']
 
-        self.checkpoint['STAGE'] = 3
-        self.save_checkpoint()
         self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
+
+        if self.checkpoint['STAGE'] < 3:
+            self.checkpoint['STAGE'] = 3
+            self.save_checkpoint()
 
         return self.clustered_questions_df
 
@@ -173,8 +177,9 @@ class ArticleGenerator:
         self.interact_model(typical_questions, self.gpt_questions_df, start_step,
                             model_name='345M', seed=77, top_k=40, verbose=self.verbose)
 
-        self.checkpoint['STAGE'] = 4
-        self.save_checkpoint()
+        if self.checkpoint['STAGE'] < 4:
+            self.checkpoint['STAGE'] = 4
+            self.save_checkpoint()
 
         return self.gpt_questions_df
 
@@ -219,8 +224,9 @@ class ArticleGenerator:
 
         self.clustered_questions_df['gpt_text'] = self.clustered_questions_df['question'].apply(fill_by_texts)
 
-        self.checkpoint['STAGE'] = 5
-        self.save_checkpoint()
+        if self.checkpoint['STAGE'] < 5:
+            self.checkpoint['STAGE'] = 5
+            self.save_checkpoint()
 
     ###############################
     # STEP 6
@@ -232,9 +238,11 @@ class ArticleGenerator:
         if self.checkpoint['STAGE'] < 6:
             self.fill_df_with_texts(self.data_df)
 
-        self.checkpoint['STAGE'] = 6
-        self.save_checkpoint()
         self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
+
+        if self.checkpoint['STAGE'] < 6:
+            self.checkpoint['STAGE'] = 6
+            self.save_checkpoint()
 
     ###############################
     # STEP 7
@@ -282,8 +290,9 @@ class ArticleGenerator:
             with open(self.default_path + 'data/all_sentences.json') as infile:
                 self.all_sentences = json.load(infile)
 
-        self.checkpoint['STAGE'] = 7
-        self.save_checkpoint()
+        if self.checkpoint['STAGE'] < 7:
+            self.checkpoint['STAGE'] = 7
+            self.save_checkpoint()
 
     ###############################
     # STEP 8
@@ -366,8 +375,9 @@ class ArticleGenerator:
                 timedelta(seconds=total_elapsed_time)
             ))
 
-        self.checkpoint['STAGE'] = 8
-        self.save_checkpoint()
+        if self.checkpoint['STAGE'] < 8:
+            self.checkpoint['STAGE'] = 8
+            self.save_checkpoint()
 
     ###############################
     ###############################
