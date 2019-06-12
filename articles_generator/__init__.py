@@ -57,7 +57,7 @@ class ArticleGenerator:
         self.clustered_questions_df = None
         self.gpt_questions_df = None
         self.all_sentences = None
-        self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0}
+        self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0, "PARSE_TEXTS_START_STEP": 0}
 
         self.load_checkpoint()
 
@@ -236,9 +236,9 @@ class ArticleGenerator:
             print(self.checkpoint)
 
         if self.checkpoint['STAGE'] < 6:
-            self.fill_df_with_texts(self.data_df)
+            self.fill_df_with_texts()
 
-        self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
+        # self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
 
         if self.checkpoint['STAGE'] < 6:
             self.checkpoint['STAGE'] = 6
@@ -604,6 +604,8 @@ class ArticleGenerator:
             save_df['question'] = strings
             save_df['gpt_text'] = texts
             save_df.to_csv(self.default_path + 'data/gpt_questions_df.csv')
+            self.checkpoint['GENERATE_TEXTS_START_STEP'] = step
+            self.save_checkpoint()
 
             return texts
 
@@ -614,29 +616,36 @@ class ArticleGenerator:
     def is_too_short(self, x):
         return len(x) < 4
 
-    def fill_df_with_texts(self, df):
+    def fill_df_with_texts(self):
 
         start_time = time()
         # we do it in a iteration way
-        ids = df['id'].values
-        i = 0
-        for id in ids:
+        ids = self.data_df['id'].values
+        start_step = self.checkpoint['PARSE_TEXTS_START_STEP']
+        for i in range(start_step, len(ids)):
+            id = ids[i]
             with open(self.default_path + 'data/texts/' + str(id) + '.txt') as reader:
                 #             print("read " + str(id) + '.txt ...')
                 text = reader.read()
-                df.loc[df['id'] == id, ['work_text']] = text
+                self.data_df.loc[self.data_df['id'] == id, ['work_text']] = text
 
                 i += 1
                 if i % 500 == 0:
                     elapsed_time = time() - start_time
                     print("{}/{} elapsed time: {}".format(i, len(ids), timedelta(seconds=elapsed_time)))
+                    self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
+                    self.checkpoint['PARSE_TEXTS_START_STEP'] = i
+                    self.save_checkpoint()
 
                     gc.collect()
 
         elapsed_time = time() - start_time
         print("elapsed time:", timedelta(seconds=elapsed_time))
+        self.data_df.to_csv(self.default_path + 'data/meta_with_texts.csv')
+        self.checkpoint['PARSE_TEXTS_START_STEP'] = i
+        self.save_checkpoint()
 
-        return df
+        return self.data_df
 
     def extract_sentences(self, df, ids):
         # Note: think about mapping functions to make it in parallel way
