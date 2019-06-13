@@ -2,6 +2,15 @@
 
 articles_generator is a module including class ArticleGenerator. All work should bdone with that class. 
 
+After cloning code from repository need to load gpt-2 models:
+
+```bash
+pip3 install -r requirements.txt
+
+python3 download_model.py 117M
+python3 download_model.py 345M
+```
+
 There are two ways to run script:
 
 - via single method
