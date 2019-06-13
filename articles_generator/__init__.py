@@ -40,23 +40,40 @@ class ArticleGenerator:
         # configuration
         ###############################
 
+        # default path where data is stored. Should have 'data' folder with 'meta.csv' and 'texts' inside.
         self.default_path = default_path
 
         self.module_url = "https://tfhub.dev/google/universal-sentence-encoder-large/3" #@param ["https://tfhub.dev/google/universal-sentence-encoder/2", "https://tfhub.dev/google/universal-sentence-encoder-large/3"]
 
+        # Maximum unique questions that can be in the cluster while questions clusterziation
         self.MAX_CLUSTER_SIZE = 250
+        # For questions clusterziation.
+        # If less then items in cluster will be closer. It is start value for clusterziation.
         self.BASE_DBSCAN_EPS = 0.4
+        # For questions clusterziation.
+        # If found cluster size bigger then MAX_CLUSTER_SIZE, clusterization will launch next cycle with
+        # new epsilon == self.BASE_DBSCAN_EPS/multiplicator. At start multiplicator = 1 and
+        # with each new cycle it decresed by DBSCAN_EPS_MULT_STEP
         self.DBSCAN_EPS_MULT_STEP = 0.3
+        # Butch size for Embedding module
         self.BATCH_SIZE = 1000
+        # Number of the closest sentences to question selected from all. Use on STEP 8
+        self.NUM_CLOSEST_SENTENCES = 20
 
+        # 0 - silent, 1 - show process stages, 2 - show debug info
         self.verbose = verbose
 
+        # DataFrame with all processing data
         self.data_df = None
+        # DataFrame with clustered questions and generated and selected texts
+        self.clustered_questions_df = None
+        # DataFrame with generated texts
+        self.gpt_questions_df = None
         self.questions = None
         self.embed_module = None
-        self.clustered_questions_df = None
-        self.gpt_questions_df = None
         self.all_sentences = None
+        # Checkpoint object - store current stage with saved data. After reload script starts from stored here point.
+        # Use self.clear_checkpoint() to start from zero point
         self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0, "PARSE_TEXTS_START_STEP": 0}
 
         self.load_checkpoint()
@@ -229,7 +246,7 @@ class ArticleGenerator:
             self.save_checkpoint()
 
     ###############################
-    # STEP 6
+    # STEP 6: load stored in the data/texts texts for questions and fill data_df with it
     ###############################
     def step_load_texts(self):
         if self.verbose > 0:
@@ -245,7 +262,7 @@ class ArticleGenerator:
             self.save_checkpoint()
 
     ###############################
-    # STEP 7
+    # STEP 7: split loaded texts to separate sentences and save to data_df
     ###############################
     def step_extract_sentences(self):
         if self.verbose > 0:
@@ -295,7 +312,8 @@ class ArticleGenerator:
             self.save_checkpoint()
 
     ###############################
-    # STEP 8
+    # STEP 8: find the closest sentences among all for single cluster and select NUM_CLOSEST_SENTENCES of them
+    # # and save to clustered_questions_df
     ###############################
     def step_find_closest_sentences_to_question(self):
         if self.verbose > 0:
@@ -346,7 +364,7 @@ class ArticleGenerator:
                 question = questions_embeddings[questions_indexes[cluster_id]]
 
             if question is not None and len(sentences) > 0:
-                closest = self.find_closest_to(sentences, question, 20)
+                closest = self.find_closest_to(sentences, question, self.NUM_CLOSEST_SENTENCES)
                 sentences_text = np.array(self.all_sentences[cluster_id])
                 closest = np.array(closest)
                 closest = closest[closest < len(sentences_text)]
@@ -380,6 +398,47 @@ class ArticleGenerator:
             self.save_checkpoint()
 
     ###############################
+    # extra methods
+    ###############################
+
+    def process_all_steps(self):
+        ''' Process all steps together with saving data '''
+        self.step_load_data()
+        self.step_prepare_tf_hub()
+        self.step_clusterize_questions()
+        self.step_generate_questions_texts()
+        self.step_merge_texts_to_questions()
+        self.step_load_texts()
+        self.step_extract_sentences()
+        self.step_find_closest_sentences_to_question()
+        self.save_articles()
+
+        return self.clustered_questions_df
+
+    def save_articles(self):
+        ''' Method saves processed data to articles_by_question.csv '''
+        self.clustered_questions_df.to_csv(self.default_path + 'data/articles_by_question.csv')
+
+    def save_checkpoint(self):
+        ''' Method saves current chekcpoint. '''
+        with open(self.default_path + 'data/checkpoint.json', 'w') as outfile:
+            json.dump(self.checkpoint, outfile)
+
+    def load_checkpoint(self):
+        ''' Method loads current checkpoint. '''
+        exists = os.path.isfile(self.default_path + 'data/checkpoint.json')
+        if exists:
+            with open(self.default_path + 'data/checkpoint.json') as infile:
+                self.checkpoint = json.load(infile)
+
+    def clear_checkpoint(self):
+        ''' Method clears current checkpoint. '''
+        self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0}
+        self.save_checkpoint()
+
+    ###############################
+    ###############################
+    # private methds
     ###############################
     ###############################
 
@@ -688,21 +747,4 @@ class ArticleGenerator:
             print("total elapsed time:", timedelta(seconds=elapsed_time))
 
         return closest
-
-    def save_articles(self):
-        self.clustered_questions_df.to_csv(self.default_path + 'data/articles_by_question.csv')
-
-    def save_checkpoint(self):
-        with open(self.default_path + 'data/checkpoint.json', 'w') as outfile:
-            json.dump(self.checkpoint, outfile)
-
-    def load_checkpoint(self):
-        exists = os.path.isfile(self.default_path + 'data/checkpoint.json')
-        if exists:
-            with open(self.default_path + 'data/checkpoint.json') as infile:
-                self.checkpoint = json.load(infile)
-
-    def clear_checkpoint(self):
-        self.checkpoint = {"STAGE": 0, "GENERATE_TEXTS_START_STEP": 0}
-        self.save_checkpoint()
 
