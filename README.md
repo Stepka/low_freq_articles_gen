@@ -30,6 +30,9 @@ a_gen.step_find_closest_sentences_to_question()
 a_gen.save_articles()
 ```
 
+# Result
+Final processed file store to `/articles_by_question.csv`
+
 # Configuration
 
 There are several configuration constants in the `ArticleGenerator`:
